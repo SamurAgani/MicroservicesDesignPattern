@@ -1,12 +1,17 @@
+using MassTransit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using Shared;
+using StockAPI.Consumer;
+using StockAPI.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +31,24 @@ namespace StockAPI
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddMassTransit(x =>
+            {
+                x.AddConsumer<OrderCreatedEventConsumer>();
+                x.UsingRabbitMq((context, cfg) =>
+                {
+                    cfg.Host(Configuration.GetConnectionString("RabbitMQ"));
+                    cfg.ReceiveEndpoint(RabbitMQSettings.StockOrderCreatedEventQueueName, e => {
+                        e.ConfigureConsumer<OrderCreatedEventConsumer>(context);
+                        
+                    });
+                });
+            });
+            services.AddMassTransitHostedService();
+            services.AddDbContext<AppDbContext>(option =>
+            {
+                option.UseInMemoryDatabase("StockDb");
 
+            });
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
